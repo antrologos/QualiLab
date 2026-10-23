@@ -960,7 +960,7 @@ function clearRecoveryUrl(){
 // "Minha Conta". Enquanto nao houver chave de servidor de fato (secret GEMINI_API_KEY etc. +
 // SHARED_KEY_DOMAINS na Edge Function ai-ask), fica false. Havendo, vire true pra reexpor os
 // textos/atalhos de "chave do servidor" na UI.
-const AI_SHARED_KEY = false;
+const AI_SHARED_KEY = true;
 
 // Handle global do cliente Supabase ativo (setado no boot do App, em modo nuvem).
 // Uso: askAIProxy le a sessao daqui pra mandar o JWT do usuario a Edge Function ai-ask —
