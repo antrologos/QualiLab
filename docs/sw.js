@@ -13,7 +13,7 @@
    ATUALIZACAO: o registro (no boot.js) detecta um worker novo em espera e mostra o chip
    "nova versao disponivel · recarregar" na barra de status; o clique manda SKIP_WAITING.
    Sem isso, SW e a maquina de mascarar deploy que o resto do repo existe para evitar. */
-const SHELL_CACHE = 'ql-shell-v1';
+const SHELL_CACHE = 'ql-shell-v2'; // [EJA] v2: expulsa do cache offline a copia PRE-lockdown do index.html (e dispara o chip 'nova versao')
 const DEPS_CACHE = 'ql-deps-v1';
 // cdn.sheetjs.com entrou na 1.4.64: o SheetJS passou a vir do fabricante na 1.4.57 (S04) e esta
 // lista ficou para tras, entao o app instalado nao importava .xlsx sem rede. A URL de la tambem e

@@ -27,12 +27,17 @@
 //     "informe sua propria chave (BYOK)" e nada mais. Havendo secret, o acesso
 //     e restrito a sessoes validas de dominios autorizados (SHARED_KEY_DOMAINS,
 //     tambem por secret; vazio por padrao = ninguem usa a chave do servidor).
+//   - [EJA] FORK antrologos/QualiLab (trava da equipe): alem do dominio, a chave DO SERVIDOR
+//     [EJA] exige body.project_id (uuid do projeto NUVEM aberto) e a RPC can_use_shared_key
+//     [EJA] (conta aprovada + membro com papel de IA + projeto em public.ai_projects + IA ativada no projeto) == true;
+//     [EJA] qualquer outra situacao => 403. BYOK (body.apiKey) e custom/azure: intactos.
 //   - baseUrl (custom/azure) e validada contra SSRF: so https + dominio publico.
 //   - Corpo limitado a MAX_BODY_CHARS; entrada acima disso e recusada com 413.
 //
 // Recebe { prompt } ou { messages }, mais opcionalmente { provider, apiKey,
 // model }, encaminha pro provedor certo, devolve { text, raw } sempre no
 // mesmo formato — o front-end nao precisa saber a forma da API de cada um.
+// [EJA] ...e { project_id } (uuid do projeto nuvem aberto), exigido SO no caminho da chave do servidor.
 //
 // Deploy: Supabase Dashboard > Edge Functions > criar/editar funcao "ai-ask" >
 // colar este codigo > Deploy. (Sem CLI necessaria.)
@@ -66,6 +71,8 @@ const WALL_CLOCK_BUDGET_MS = 135_000;  // deadline global < ~150s do teto (marge
 const MIN_ATTEMPT_MS = 15_000;         // nao inicia tentativa sem ao menos isso de orcamento restante
 const SHARED_KEY_DOMAINS = (Deno.env.get('SHARED_KEY_DOMAINS') || '')
   .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+// [EJA] formato de uuid do body.project_id (checado ANTES de ir ao banco; o banco revalida o tipo)
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;  // [EJA]
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -84,6 +91,8 @@ const trunc = (s: string, n = 600) => (s.length > n ? s.slice(0, n) + '…' : s)
 
 // valida a sessao do chamador contra o Auth do proprio projeto (o JWT vem no
 // header Authorization; o front manda o token da sessao quando existe)
+// [EJA] Devolve { user, sb } ou null (antes: so o user). `sb` e o client que carrega o
+// [EJA] Authorization do chamador — reaproveitado na RPC can_use_shared_key (roda como o usuario).
 async function getCaller(req: Request) {
   const authHeader = req.headers.get('Authorization') || '';
   if (!/^Bearer .+/i.test(authHeader)) return null;
@@ -92,13 +101,21 @@ async function getCaller(req: Request) {
   if (!url || !anon) return null;
   try {
     const sb = createClient(url, anon, {
-      global: { headers: { Authorization: authHeader } },
+      global: {
+        headers: { Authorization: authHeader },
+        // [EJA] timeout de 10 s em getUser() e na RPC: Auth/PostgREST "pendurados" viram null/erro limpo
+        // [EJA] (401/503) em vez de estourar o teto de ~150 s da plataforma (HTTP 546 cru no front).
+        fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, signal: AbortSignal.timeout(10_000) }),  // [EJA]
+      },
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data, error } = await sb.auth.getUser();
-    if (error) return null;
-    return data?.user ?? null;
-  } catch (_e) { return null; }
+    if (error && (error.name === 'AuthRetryableFetchError' || !error.status || error.status >= 500)) {  // [EJA] Auth fora do ar/timeout != sessao invalida
+      throw new HttpError(503, 'O servidor de autenticação da equipe não respondeu. Tente de novo em instantes; se persistir, avise a coordenação.');  // [EJA]
+    }  // [EJA]
+    if (error || !data?.user) return null;  // [EJA] (era: `if (error) return null; return data?.user ?? null;`)
+    return { user: data.user, sb };  // [EJA]
+  } catch (e) { if (e instanceof HttpError) throw e; return null; }  // [EJA] a 503 acima passa; o resto (JWT invalido etc.) = sem sessao
 }
 
 function sharedKeyAllowed(user: { email?: string | null } | null) {
@@ -437,15 +454,36 @@ Deno.serve(async (req: Request) => {
       }
       // Ha uma chave no servidor: liberada so a sessoes validas de dominios autorizados
       // (SHARED_KEY_DOMAINS, por secret; vazio por padrao = ninguem usa a chave do servidor).
-      const user = await getCaller(req);
-      if (!user) {
+      const caller = await getCaller(req);  // [EJA] agora { user, sb } | null (sb = client com o JWT do chamador)
+      if (!caller) {  // [EJA]
         throw new HttpError(401, 'Esta chave exige uma sessão válida — entre com sua conta, ou configure sua própria chave (BYOK) em "Minha Conta"');
       }
-      if (!sharedKeyAllowed(user)) {
+      if (!sharedKeyAllowed(caller.user)) {  // [EJA]
         throw new HttpError(403, 'Sua conta não tem acesso à chave do servidor — configure sua própria chave (BYOK) em "Minha Conta"');
       }
+      // [EJA] Trava da equipe: a chave do servidor so vale DENTRO do projeto autorizado. O front manda
+      // [EJA] body.project_id (uuid do projeto NUVEM aberto); o banco decide na RPC can_use_shared_key
+      // [EJA] (conta aprovada + membro com papel de IA + projeto em public.ai_projects + IA ativada no projeto), executada COMO o
+      // [EJA] chamador (auth.uid() = sub do JWT). Sem project_id, uuid invalido, erro na RPC ou retorno
+      // [EJA] != true => 403 e NUNCA libera. BYOK (body.apiKey) e custom/azure nao passam por aqui.
+      const projectId = typeof body.project_id === 'string' ? body.project_id : '';  // [EJA]
+      if (!UUID_RE.test(projectId)) {  // [EJA]
+        throw new HttpError(403, 'A chave de IA do servidor só vale dentro do projeto da equipe (educacao_ja). Abra o projeto na nuvem. Se você já está nele, recarregue a página (Ctrl+F5; no Mac, Cmd+Shift+R): o aplicativo está desatualizado.');  // [EJA]
+      }  // [EJA]
+      let okShared = false, rpcFailed = false;  // [EJA]
+      try {  // [EJA]
+        const { data: allowed, error: rpcErr } = await caller.sb.rpc('can_use_shared_key', { p_project: projectId });  // [EJA]
+        if (rpcErr) { rpcFailed = true; console.warn('[EJA] can_use_shared_key falhou:', rpcErr.code || '', rpcErr.message || ''); }  // [EJA] so o erro da RPC — nunca o corpo
+        okShared = !rpcErr && allowed === true;  // [EJA]
+      } catch (_e) { rpcFailed = true; okShared = false; }  // [EJA] excecao do client (rede/timeout) = negado
+      if (rpcFailed) {  // [EJA] falha TECNICA (SQL nao rodado, cache do PostgREST, rede) != negativa: mensagem distinta, e mesmo assim nega
+        throw new HttpError(503, 'O servidor de IA da equipe não conseguiu verificar a autorização (regras do banco ausentes ou indisponíveis). Tente de novo em instantes; se persistir, avise a coordenação.');  // [EJA]
+      }  // [EJA]
+      if (!okShared) {  // [EJA]
+        throw new HttpError(403, 'Sua conta não está autorizada a usar a chave de IA do servidor neste projeto (conta não aprovada, projeto não registrado, IA desligada no projeto, ou papel sem direito a IA).');  // [EJA]
+      }  // [EJA]
       apiKey = serverKey;
-      model = body.model || DEFAULT_MODELS[provider];
+      model = DEFAULT_MODELS[provider];  // [EJA] chave da equipe = modelo da equipe (secret OPENAI_MODEL etc.); a escolha em Minha Conta so vale para chave propria (era: body.model || DEFAULT_MODELS[provider])
     }
 
     // aceita tanto { prompt, system } (uso simples) quanto { messages: [{role,content}] }

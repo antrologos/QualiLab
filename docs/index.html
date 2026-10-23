@@ -6,9 +6,10 @@
 <title>QualiLab · laboratório de pesquisa qualitativa</title>
 <!-- descricao para pre-visualizacao de link (o app e divulgado por WhatsApp/e-mail entre
      pesquisadores; sem isto o cartao do link vem vazio) -->
-<meta name="description" content="Ferramenta livre de análise qualitativa (QDA): codifique documentos, reconcilie entre pesquisadores, gere gráficos e relatórios de transparência. Roda no navegador, sem instalar." />
+<!-- [EJA] descricoes alinhadas ao uso da equipe (sem modo arquivo) -->
+<meta name="description" content="Ferramenta livre de análise qualitativa (QDA): codifique documentos, reconcilie entre pesquisadores, gere gráficos e relatórios de transparência. Roda no navegador; os dados ficam no servidor da equipe." />
 <meta property="og:title" content="QualiLab · laboratório de pesquisa qualitativa" />
-<meta property="og:description" content="Ferramenta livre de análise qualitativa (QDA) que roda no navegador, sem instalar. Seus dados ficam num arquivo seu ou na nuvem, como você escolher." />
+<meta property="og:description" content="Ferramenta livre de análise qualitativa (QDA) que roda no navegador. Os dados ficam no servidor da equipe." />
 <meta property="og:type" content="website" />
 <!-- favicon SVG inline (sem arquivo externo): "Q" serifada branca sobre quadrado azul-marinho FGV -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2300427A'/><text x='16.02' y='23.13' font-family='Georgia,serif' font-size='26' font-weight='700' fill='white' text-anchor='middle'>Q</text></svg>" />
@@ -908,8 +909,9 @@ function icon(name, size=16){
    pelas policies de RLS. Da tambem pra apontar pro seu Supabase sem editar aqui,
    pelo card "Conexao (Supabase)" do hub do projeto (ver CUSTOM_SUPABASE logo
    abaixo). */
-let SUPABASE_URL = "https://hijtbvrvdrcrkjsuvlmt.supabase.co";
-let SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpanRidnJ2ZHJjcmtqc3V2bG10Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3MzE5MjEsImV4cCI6MjEwODMwNzkyMX0.8fOXRzeKPObteCWZIGEPX2-U4r8eMPBxRGpufT4MCpI";
+const TEAM_SUPABASE_URL = "https://hijtbvrvdrcrkjsuvlmt.supabase.co"; // [EJA] credenciais da equipe: fonte unica (o bloco TEAM_LOCKDOWN, apos AI_SHARED_KEY, as restaura)
+const TEAM_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpanRidnJ2ZHJjcmtqc3V2bG10Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3MzE5MjEsImV4cCI6MjEwODMwNzkyMX0.8fOXRzeKPObteCWZIGEPX2-U4r8eMPBxRGpufT4MCpI"; // [EJA]
+let SUPABASE_URL = TEAM_SUPABASE_URL, SUPABASE_ANON_KEY = TEAM_SUPABASE_ANON_KEY; // [EJA]
 // Conexao PERSONALIZADA (card "Conexao (Supabase)" no hub do projeto): URL/key salvas no
 // localStorage VENCEM as credenciais embutidas — e o que permite apontar o app publicado pro
 // SEU proprio Supabase sem editar o arquivo. CUSTOM_SUPABASE marca esse estado (pilula
@@ -961,6 +963,19 @@ function clearRecoveryUrl(){
 // SHARED_KEY_DOMAINS na Edge Function ai-ask), fica false. Havendo, vire true pra reexpor os
 // textos/atalhos de "chave do servidor" na UI.
 const AI_SHARED_KEY = true;
+// [EJA] Fork da Vertical EJA: o site serve SO o projeto da equipe na nuvem.
+const TEAM_LOCKDOWN = true; // [EJA] false = app upstream intacto (cada gate abaixo reduz a expressao original)
+const TEAM_COORDINATOR_EMAIL = 'rogerio.barbosa@iesp.uerj.br'; // [EJA] gate COSMETICO do card "Criar projeto" (a trava real e o trigger do banco)
+const TEAM_AI_PROVIDER = TEAM_LOCKDOWN ? 'openai' : 'gemini'; // [EJA] provedor padrao do app = o da chave do servidor (secret OPENAI_API_KEY); fora do lockdown, o upstream ('gemini')
+const TEAM_AI_MODEL = 'gpt-5.6-terra'; // [EJA] = secret OPENAI_MODEL da funcao ai-ask: com a chave da equipe o servidor ignora o modelo escolhido no app, entao rotulo, estimativa e trilha usam este id
+function teamAIProvider(p, k){ return (TEAM_LOCKDOWN && !k && (p==='gemini' || p==='anthropic')) ? TEAM_AI_PROVIDER : p; } // [EJA] sem chave propria, so o provedor da chave do servidor faz sentido (um 'gemini' salvo antes do fork daria 400)
+// [EJA] Em lockdown, um Supabase pessoal ('qualilab:url'/'qualilab:key') ou 'qualilab:forcelocal' gravados neste
+// [EJA] navegador antes do fork venceriam as credenciais da equipe no bloco CUSTOM_SUPABASE acima (que roda antes
+// [EJA] desta const existir — TDZ). Aqui isso e desfeito e o localStorage limpo: so o Supabase da equipe.
+if(TEAM_LOCKDOWN){ // [EJA]
+  SUPABASE_URL = TEAM_SUPABASE_URL; SUPABASE_ANON_KEY = TEAM_SUPABASE_ANON_KEY; CUSTOM_SUPABASE = false; FORCE_LOCAL = false; // [EJA]
+  try{ localStorage.removeItem('qualilab:url'); localStorage.removeItem('qualilab:key'); localStorage.removeItem('qualilab:forcelocal'); }catch(e){} // [EJA]
+} // [EJA]
 
 // Handle global do cliente Supabase ativo (setado no boot do App, em modo nuvem).
 // Uso: askAIProxy le a sessao daqui pra mandar o JWT do usuario a Edge Function ai-ask —
@@ -968,6 +983,10 @@ const AI_SHARED_KEY = true;
 // (ver supabase/functions/ai-ask/index.ts). Com BYOK a chamada nem chega la: vai direto do
 // navegador ao provedor (ver "BYOK CLIENTE-DIRETO"), sem sessao e sem intermediario.
 let _sbForAI = null;
+// [EJA] id (uuid) do projeto NUVEM aberto — espelho de `project` da App(), mantido pelo useEffect ao lado do
+// [EJA] loadProject; null fora da nuvem (rascunho/arquivo), no gate e no logout. askAIProxy manda-o como
+// [EJA] body.project_id: a ai-ask do fork so libera a chave do servidor dentro do projeto da equipe (RPC can_use_shared_key).
+let _projForAI = null; // [EJA]
 async function aiAuthToken(){
   try{
     if(_sbForAI){
@@ -14968,7 +14987,7 @@ function useBoot({ wantCloud, setStore, setMode, setUser, setPhase, onError, ope
       // ARQUIVO SALVO TEM PRIORIDADE: um handle no IDB = escolha deliberada de modo arquivo,
       // reabre direto (verde) em qualquer configuracao (com ou sem nuvem embutida). O usuario
       // sai dele por "Sair deste arquivo" (limpa o handle) no hub do projeto.
-      const lastHandle = await reopenLastFile();
+      const lastHandle = TEAM_LOCKDOWN ? null : await reopenLastFile(); // [EJA] lockdown: ignora handle de .qualilab salvo (so nuvem)
       if(lastHandle){
         let fileSt = null;
         // arquivo corrompido LANÇA (não vira projeto vazio) — cai pro fluxo normal com aviso
@@ -14984,7 +15003,7 @@ function useBoot({ wantCloud, setStore, setMode, setUser, setPhase, onError, ope
       // não reabriu automático (permissão readwrite em 'prompt' — precisa de gesto do usuário — ou
       // a leitura falhou): guarda o handle pra oferecer "Reabrir <arquivo>" na tela inicial (o clique
       // dá o gesto do requestPermission). Não força welcome nem preempta um auto-login de nuvem abaixo.
-      const pending = await getSavedFileHandle();
+      const pending = TEAM_LOCKDOWN ? null : await getSavedFileHandle(); // [EJA] lockdown: sem card "Reabrir <arquivo>"
       if(pending) setPendingFile(pending);
       if(wantCloud){
         const createClient = await getCreateClient();
@@ -15460,7 +15479,7 @@ function useActivity({ store, project, phase, mainView }){
 }
 /* ============================== APP ============================== */
 function App(){
-  const wantCloud = !!(SUPABASE_URL && SUPABASE_ANON_KEY) && !FORCE_LOCAL;
+  const wantCloud = !!(SUPABASE_URL && SUPABASE_ANON_KEY) && (TEAM_LOCKDOWN || !FORCE_LOCAL); // [EJA] lockdown ignora "Desconectar (modo local)"
   const [store, setStore] = useState(null);
   const [mode, setMode] = useState(wantCloud ? 'cloud' : 'local');
   // modo derivado inclui 'file' quando o store ativo é FileStore
@@ -15881,6 +15900,7 @@ function App(){
   }
 
   async function enterLocalOffline(display){
+    if(TEAM_LOCKDOWN) return; // [EJA] lockdown: sem rascunho
     const st = LocalStore();
     setMode('local');
     setStore(st);
@@ -15923,6 +15943,9 @@ function App(){
     setActiveId(a => a && d.find(x=>x.id===a) ? a : (docsByName(d)[0]?.id || null));
   }, []);
   useEffect(()=>{ if(store && project && phase==='work') loadProject(store, project.id); }, [store, project, phase, loadProject]);
+  // [EJA] espelha no handle global o id do projeto NUVEM aberto (askAIProxy -> body.project_id). store.mode diz onde
+  // [EJA] o projeto vive: rascunho ('local') e arquivo ('file') NAO contam; cobre abrir, trocar, sair e logout.
+  useEffect(()=>{ _projForAI = (store?.mode==='cloud' && project?.id) ? project.id : null; }, [store, project]); // [EJA]
 
   /* papel do usuário no projeto (admin/member) */
   useEffect(()=>{ (async()=>{ if(store && project && phase==='work' && store.myRole){ try{ setRole(await store.myRole(project.id)); }catch(e){ setRole('member'); } } })(); }, [store, project, phase]);
@@ -17561,7 +17584,7 @@ function App(){
   // precisar abrir um projeto antes. Mesma logica do card "Conexao" do ProjectModal: credenciais
   // no localStorage (so neste navegador) + reload; CUSTOM_SUPABASE re-deriva no boot seguinte.
   // DEFINIDO ANTES dos returns de fase (o Auth referencia connectCustomCloud) pra evitar TDZ.
-  const connectCustomCloud = (url,key)=>{ try{ localStorage.setItem('qualilab:url',url); localStorage.setItem('qualilab:key',key); localStorage.removeItem('qualilab:forcelocal'); }catch(e){ return t('err.cloud.save',{e:(e&&e.name)||'erro'}); } location.reload(); }; // #25: erro nao recarrega
+  const connectCustomCloud = (url,key)=>{ if(TEAM_LOCKDOWN) return; /* [EJA] so o Supabase da equipe */ try{ localStorage.setItem('qualilab:url',url); localStorage.setItem('qualilab:key',key); localStorage.removeItem('qualilab:forcelocal'); }catch(e){ return t('err.cloud.save',{e:(e&&e.name)||'erro'}); } location.reload(); }; // #25: erro nao recarrega
   const resetCustomCloud = ()=>{ try{ localStorage.removeItem('qualilab:url'); localStorage.removeItem('qualilab:key'); localStorage.removeItem('qualilab:forcelocal'); }catch(e){} location.reload(); };
 
   if(phase==='boot') return html`<div class="empty"><div class="t">${t('common.loading')}</div></div>`;
@@ -17575,7 +17598,7 @@ function App(){
     onVerifySignup=${store?.verifySignup ? (async (email,codigo,disp)=>{ try{ const u=await store.verifySignup(email,codigo,disp); try{localStorage.setItem('qualilab:name',u.name);}catch(e){} setErr(null); await afterAuth(store, u.name); }catch(e){ setErr(String(e.message||e)); } }) : undefined}
     onResendSignup=${store?.resendSignup ? (async (email)=>{ try{ setErr(null); await store.resendSignup(email); return true; }catch(e){ setErr(String(e.message||e)); return false; } }) : undefined}
     onBack=${()=>{ setErr(null); setPhase('welcome'); }}
-    onServer=${connectCustomCloud} onResetServer=${resetCustomCloud}
+    onServer=${TEAM_LOCKDOWN ? undefined : connectCustomCloud /* [EJA] esconde "Conectar ao meu Supabase" */} onResetServer=${resetCustomCloud}
   />`;
 
   // fase 'recover': o usuario voltou do link de redefinicao (ver RECOVERY_INTENT no boot).
@@ -17597,7 +17620,7 @@ function App(){
   />`;
 
   const openFileProject = async (isNew)=>{
-    if(!supportsFileAPI) return;
+    if(!supportsFileAPI || TEAM_LOCKDOWN) return; // [EJA] lockdown: sem modo arquivo
     try{
       const fh = isNew
         ? await window.showSaveFilePicker({ suggestedName:'projeto.qualilab', types:[{description:'QualiLab',accept:{'application/json':['.qualilab']}}] })
@@ -17617,7 +17640,7 @@ function App(){
   // permissão readwrite (que o boot não pôde, requestPermission exige gesto) e reabrir o arquivo.
   const reopenPendingFile = async ()=>{
     const handle = pendingFile;
-    if(!handle) return;
+    if(!handle || TEAM_LOCKDOWN) return; // [EJA]
     try{
       let perm = await handle.queryPermission({mode:'readwrite'});
       if(perm!=='granted') perm = await handle.requestPermission({mode:'readwrite'});
@@ -17636,7 +17659,7 @@ function App(){
   // armazenamento PRIMARIO (pilula verde). Copia tudo do projeto atual pro arquivo novo sem
   // passar pelo Gate. So Chromium (File System Access API); acionado pelo card do ProjectModal.
   const saveAsFile = async ()=>{
-    if(!supportsFileAPI) return;
+    if(!supportsFileAPI || TEAM_LOCKDOWN) return; // [EJA]
     try{
       const db = await buildQualilabDb();
       const suggested = (project?.name||'projeto').replace(/[^\w\-]+/g,'_')+'.qualilab';
@@ -17695,7 +17718,7 @@ function App(){
     onOpenFile=${()=>openFileProject(false)}
     onCloud=${()=>{ setErr(null); setPhase('auth'); }}
     onRascunho=${()=>enterLocalOffline()}
-    onServer=${connectCustomCloud} onResetServer=${resetCustomCloud}
+    onServer=${TEAM_LOCKDOWN ? undefined : connectCustomCloud /* [EJA] esconde "Conectar ao meu Supabase" */} onResetServer=${resetCustomCloud}
   />${aiAsk && html`<${AiOptInModal} contexto=${aiAsk.contexto} onChoose=${aiAsk.resolve} />`}`;
 
   if(phase==='gate') return html`<div>
@@ -18500,9 +18523,9 @@ function App(){
     onReconnectCloud=${()=>{ try{localStorage.removeItem('qualilab:forcelocal');}catch(e){} location.reload(); }}
     canFolderBackup=${!!store?.enableFolderBackup} backupStatus=${backupStatus}
     onEnableFolderBackup=${enableFolderBackup} onDisableFolderBackup=${disableFolderBackup}
-    canSaveAsFile=${supportsFileAPI && store?.mode==='local'} onSaveAsFile=${()=>{ setProjEdit(false); saveAsFile(); }}
+    canSaveAsFile=${!TEAM_LOCKDOWN /* [EJA] */ && supportsFileAPI && store?.mode==='local'} onSaveAsFile=${()=>{ setProjEdit(false); saveAsFile(); }}
     canLeaveFile=${store?.mode==='file'} onLeaveFile=${()=>{ setProjEdit(false); leaveFile(); }}
-    canSendToCloud=${wantCloud && store?.mode!=='cloud'} onOpenSendToCloud=${()=>{ setProjEdit(false); setSendCloudOpen(true); }} />`}
+    canSendToCloud=${!TEAM_LOCKDOWN /* [EJA] */ && wantCloud && store?.mode!=='cloud'} onOpenSendToCloud=${()=>{ setProjEdit(false); setSendCloudOpen(true); }} />`}
 
   ${sendCloudOpen && html`<${SendToCloudModal} defaultName=${project?.name||'Projeto'}
     onBuildDb=${buildQualilabDb} onGatherPdfs=${gatherPdfs} onGatherPdfIndexes=${gatherPdfIndexes} hasPdfs=${docs.some(d=>d.has_pdf)}
@@ -18554,18 +18577,18 @@ function Welcome({ onNewFile, onOpenFile, onCloud, onRascunho, onServer, onReset
         <span class="brand" style="font-size:44px;line-height:1;color:var(--teal)" aria-hidden="true">ualiLab</span>
       </h2>
       <p class="tag" style="margin:3px 0 0">${t('wel.tag')}</p>
-      <p class="hint" style="margin:7px 0 0">${t('wel.how')}</p>
+      <p class="hint" style="margin:7px 0 0">${TEAM_LOCKDOWN ? 'Entre com a sua conta para acessar o projeto da equipe.' /* [EJA] */ : t('wel.how')}</p>
     </div>
     ${err && html`<div class="banner err" style="margin:0 0 12px">${humanizeError(err)||err}</div>`}
-    ${pendingFile && html`<button class="wcard wrow" style="margin:0 0 12px;border-color:var(--ok);border-width:2px" onClick=${onReopenFile}>
+    ${pendingFile && !TEAM_LOCKDOWN /* [EJA] */ && html`<button class="wcard wrow" style="margin:0 0 12px;border-color:var(--ok);border-width:2px" onClick=${onReopenFile}>
       <svg class="wicon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ok)"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/></svg>
       <span style="flex:1">
         <span class="wtitle">${t('wel.reopen',{name:pendingFile.name})}</span>
         <span class="wdesc" style="display:block;margin-top:2px">${t('wel.reopen.hint')}</span>
       </span>
     </button>`}
-    <div style="display:grid;grid-template-columns:${supportsFileAPI?'1fr 1fr':'1fr'};gap:12px">
-      ${supportsFileAPI && html`<button class="wcard" onClick=${onNewFile}>
+    <div style="display:grid;grid-template-columns:${supportsFileAPI && !TEAM_LOCKDOWN /* [EJA] */ ?'1fr 1fr':'1fr'};gap:12px">
+      ${supportsFileAPI && !TEAM_LOCKDOWN /* [EJA] */ && html`<button class="wcard" onClick=${onNewFile}>
         <svg class="wicon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ok)"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/></svg>
         <span class="wtitle">${t('wel.file')}</span>
         <span class="wdesc">${t('wel.file.desc')}</span>
@@ -18584,18 +18607,18 @@ function Welcome({ onNewFile, onOpenFile, onCloud, onRascunho, onServer, onReset
             No `title` on the link: it shadowed the accessible name (measured in the a11y tree),
             so the screen reader announced a reassuring "about the project" while the eye read a
             warning. The visible text is the label, and it must be the one reaching both. */''}
-      ${!CUSTOM_SUPABASE && html`<p class="meta" style="grid-column:${supportsFileAPI?2:1};margin:-4px 2px 0;font-size:11px;line-height:1.45">
+      ${!CUSTOM_SUPABASE && !TEAM_LOCKDOWN /* [EJA] frase falsa no Supabase da equipe */ && html`<p class="meta" style="grid-column:${supportsFileAPI?2:1};margin:-4px 2px 0;font-size:11px;line-height:1.45">
         <a href="https://github.com/LuizPF42/QualiLab" target="_blank" rel="noopener"
            style="color:var(--teal);text-decoration:underline;text-underline-offset:2px">${t('wel.devSees')}</a>
       </p>`}
     </div>
-    <button class="wcard wrow" style="margin-top:12px" onClick=${onRascunho}>
+    ${!TEAM_LOCKDOWN /* [EJA] sem rascunho */ && html`<button class="wcard wrow" style="margin-top:12px" onClick=${onRascunho}>
       <svg class="wicon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ink-faint)"><path d="M9 3h6"/><path d="M14 3v5l4.8 9.6A1.5 1.5 0 0 1 17.5 20H6.5a1.5 1.5 0 0 1-1.3-2.4L10 8V3"/></svg>
       <span style="flex:1">
         <span class="wtitle">${t('wel.draft')}</span> <span class="meta">${t('wel.draft.tag')}</span>
         <span class="wdesc" style="display:block;margin-top:2px">${t('wel.draft.desc')}</span>
       </span>
-    </button>
+    </button>` /* [EJA] */}
     ${/* INSTALL INVITE. Only shows once the browser HAS offered to install (see
           useInstallPrompt): outside Chromium, or with the app already installed, it disappears
           entirely instead of becoming a button that does nothing. It sits BELOW the cards on
@@ -18607,7 +18630,7 @@ function Welcome({ onNewFile, onOpenFile, onCloud, onRascunho, onServer, onReset
           stays one click away, so nobody is forced through Edge — the icon may not matter to
           whoever is reading. Ranking is a recommendation; removing the Chrome exit would be
           choosing for them. */''}
-    ${canInstall && html`<div style="margin-top:12px;display:flex;align-items:center;gap:11px;padding:11px 14px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface)">
+    ${canInstall && !TEAM_LOCKDOWN /* [EJA] o convite fala em abrir .qualilab */ && html`<div style="margin-top:12px;display:flex;align-items:center;gap:11px;padding:11px 14px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface)">
       <span style="color:var(--teal);display:flex;flex:0 0 auto">${icon('install', 22)}</span>
       <span style="flex:1;min-width:0">
         <span class="wtitle" style="font-size:.875rem">${t('wel.install')}</span>
@@ -18618,7 +18641,7 @@ function Welcome({ onNewFile, onOpenFile, onCloud, onRascunho, onServer, onReset
         <button class=${'btn sm' + (edgeUrl ? '' : ' primary')} onClick=${install}>${edgeUrl ? t('wel.install.here') : t('wel.install.only')}</button>
       </span>
     </div>`}
-    ${supportsFileAPI
+    ${TEAM_LOCKDOWN ? null : /* [EJA] */ supportsFileAPI
       ? html`<p class="meta" style="text-align:center;margin:14px 0 0;font-size:11.5px">${t('wel.hasFile')} <button class="btn sm ghost" style="font-size:11.5px" onClick=${onOpenFile}>${t('wel.openFile')}</button></p>`
       : html`<p class="meta" style="text-align:center;margin:14px 0 0;font-size:11px">${t('wel.noFileApi')}</p>`}
     ${onServer && html`<${ServerConnect} onConnect=${onServer} onReset=${onResetServer} />`}
@@ -18922,6 +18945,7 @@ function Gate({ onCreate, onJoin, onOpen, onOpenFile, onNewFile, err, user, proj
   const [access,setAccess]=useState({ flags:{ blind:false, restrict_docs:false, restrict_code_memos:false, cats_are_metadata:false }, caps:{} });
   const [code,setCode]=useState('');
   const list = projects||[];
+  const podeCriar = !TEAM_LOCKDOWN || (user?.email||'').toLowerCase()===TEAM_COORDINATOR_EMAIL.toLowerCase(); // [EJA] gate COSMETICO do card "Criar projeto" (a trava real e o trigger project_creators do banco)
   const num = (p)=>{ const bits=[];
     if(p.n_documents!=null) bits.push(t('gate.docs',{n:p.n_documents}));
     if(p.n_codings!=null) bits.push(t('gate.spans',{n:p.n_codings}));
@@ -18932,7 +18956,7 @@ function Gate({ onCreate, onJoin, onOpen, onOpenFile, onNewFile, err, user, proj
       <div class="grow"></div>
       ${mode==='cloud' && onAccount && html`<button class="btn sm ghost" onClick=${onAccount}>${t('gate.account')}</button>`}
     </div>
-    <p class="hint">${t('gate.hint')}</p>
+    <p class="hint">${podeCriar ? t('gate.hint') : 'Abra um projeto da lista ou entre com o código enviado pela coordenação.' /* [EJA] */}</p>
     ${err && html`<div class="banner err" style="margin:0 0 12px">${humanizeError(err)||err}</div>`}
 
     ${list.length>0 ? html`<div style="margin-bottom:14px;max-height:240px;overflow:auto">
@@ -18944,11 +18968,11 @@ function Gate({ onCreate, onJoin, onOpen, onOpenFile, onNewFile, err, user, proj
           <button class="btn sm">${t('acc.open')}</button>
         </div>`)}
       </div>`
-      : html`<div class="card" style="margin-bottom:14px"><span class="meta">${t('gate.empty')}</span></div>`}
+      : html`<div class="card" style="margin-bottom:14px"><span class="meta">${podeCriar ? t('gate.empty') : 'Você ainda não está em nenhum projeto. Peça o código à coordenação e entre com ele abaixo.' /* [EJA] */}</span></div>`}
 
     <div class="field"><div class="field-label">${t('auth.name')}</div>
       <input class="txtin" value=${name} onInput=${e=>setName(e.target.value)} placeholder=${t('auth.name.ph')} /></div>
-    <div class="card" style="margin-bottom:12px">
+    ${podeCriar /* [EJA] */ && html`<div class="card" style="margin-bottom:12px">
       <div class="field-label">${t('gate.create')}</div>
       <div class="row" style="gap:6px;margin-bottom:8px">
         <input class="txtin" value=${pname} onInput=${e=>setPname(e.target.value)} placeholder=${t('gate.pname.ph')} />
@@ -18975,14 +18999,14 @@ function Gate({ onCreate, onJoin, onOpen, onOpenFile, onNewFile, err, user, proj
           onCaps=${c=>setAccess(a=>({ ...a, caps: c }))} />
       </div>`}
       <button class="btn primary" style="width:100%" onClick=${()=>onCreate(pname,name,pmode,prai, pmode==='collective' ? access : null)}>${t('gate.createBtn')}</button>
-    </div>
+    </div>` /* [EJA] */}
     <div class="card">
       <div class="field-label">${t('gate.join')}</div>
       <div class="row"><input class="txtin" value=${code} onInput=${e=>setCode(e.target.value)} placeholder=${t('gate.code.ph')} style="text-transform:uppercase" />
         <button class="btn" onClick=${()=>onJoin(code,name)}>${t('gate.joinBtn')}</button></div>
     </div>
 
-    ${supportsFileAPI && html`<div class="card" style="border-style:dashed">
+    ${supportsFileAPI && !TEAM_LOCKDOWN /* [EJA] */ && html`<div class="card" style="border-style:dashed">
       <div class="field-label">${t('gate.localFile')} <span class="pill" style="font-size:10px;vertical-align:middle">${t('gate.private')}</span></div>
       <p class="hint" style="margin:0 0 8px" dangerouslySetInnerHTML=${{__html: mdLite(t('gate.localFile.hint'))}}></p>
       <div class="row" style="gap:8px">
@@ -18990,7 +19014,7 @@ function Gate({ onCreate, onJoin, onOpen, onOpenFile, onNewFile, err, user, proj
         <button class="btn sm ghost" onClick=${onNewFile}>${t('gate.newFile')}</button>
       </div>
     </div>`}
-    ${!supportsFileAPI && html`<p class="hint" style="text-align:center">${t('gate.noFileApi')}</p>`}
+    ${!supportsFileAPI && !TEAM_LOCKDOWN /* [EJA] */ && html`<p class="hint" style="text-align:center">${t('gate.noFileApi')}</p>`}
   </div></div>`;
 }
 
@@ -19712,7 +19736,7 @@ function ProjectModal({ store, mode, user, project, projectMode, isAdmin, member
     </div>`}
 
     <!-- CONEXÃO -->
-    <details style="margin-bottom:6px">
+    ${!TEAM_LOCKDOWN /* [EJA] conexao fixa no Supabase da equipe: o card inteiro some */ && html`<details style="margin-bottom:6px">
       <summary style="cursor:pointer;font-size:12.5px;color:var(--ink-soft)">${t('proj.conn')}</summary>
       <div style="margin-top:10px">
       ${cloud
@@ -19721,7 +19745,7 @@ function ProjectModal({ store, mode, user, project, projectMode, isAdmin, member
               : t('proj.conn.default'))}}></p>
             <div class="row" style="gap:8px;flex-wrap:wrap">
               ${CUSTOM_SUPABASE && html`<button class="btn sm" onClick=${onResetCloud}>${t('proj.conn.reset')}</button>`}
-              <button class="btn sm ghost" onClick=${onClearCloud}>${t('proj.conn.clear')}</button>
+              ${!TEAM_LOCKDOWN /* [EJA] "Desconectar (modo local)" cairia num rascunho */ && html`<button class="btn sm ghost" onClick=${onClearCloud}>${t('proj.conn.clear')}</button>`}
             </div></div>`
         : html`<div><p class="hint">${t('proj.conn.form')}${(SUPABASE_URL&&SUPABASE_ANON_KEY)?t('proj.conn.orSaved'):''}.</p>
             <div class="field"><div class="field-label">${t('proj.conn.url')}</div><input class="txtin" value=${url} onInput=${e=>{ setUrl(e.target.value); setConnErr(null); }} placeholder="https://xxxx.supabase.co" /></div>
@@ -19733,7 +19757,7 @@ function ProjectModal({ store, mode, user, project, projectMode, isAdmin, member
               ${(SUPABASE_URL&&SUPABASE_ANON_KEY) && html`<button class="btn sm ghost" title=${t('proj.conn.again.tip',{url:SUPABASE_URL})} onClick=${onReconnectCloud}>${t('proj.conn.again')}</button>`}
             </div></div>`}
       </div>
-    </details>
+    </details>` /* [EJA] */}
 
     <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" onClick=${onClose}>${t('common.close')}</button></div>
   </div></div>`;
@@ -19773,7 +19797,7 @@ function AccountModal({ user, projects, onClose, onChangePassword, onChangeName,
 
   // BYOK (bring your own key): config de IA pessoal, guardada so no localStorage deste
   // navegador — ausente significa "usa a chave/modelo do servidor, se houver" (default).
-  const [aiProvider,setAiProvider]=useState(()=>{ try{return localStorage.getItem('qualilab:ai_provider')||'gemini';}catch(e){return 'gemini';} });
+  const [aiProvider,setAiProvider]=useState(()=>{ try{return teamAIProvider(localStorage.getItem('qualilab:ai_provider')||TEAM_AI_PROVIDER, localStorage.getItem('qualilab:ai_key')||'');}catch(e){return TEAM_AI_PROVIDER;} }); // [EJA] padrao = provedor da chave do servidor
   const [aiKey,setAiKey]=useState(()=>{ try{return localStorage.getItem('qualilab:ai_key')||'';}catch(e){return '';} });
   const [aiModel,setAiModel]=useState(()=>{ try{return localStorage.getItem('qualilab:ai_model')||'';}catch(e){return '';} });
   const [aiBaseUrl,setAiBaseUrl]=useState(()=>{ try{return localStorage.getItem('qualilab:ai_baseurl')||'';}catch(e){return '';} });
@@ -19855,8 +19879,8 @@ function AccountModal({ user, projects, onClose, onChangePassword, onChangeName,
   });
   const clearAI = ()=>run(async()=>{
     try{ localStorage.removeItem('qualilab:ai_provider'); localStorage.removeItem('qualilab:ai_key'); localStorage.removeItem('qualilab:ai_model'); localStorage.removeItem('qualilab:ai_baseurl'); }catch(e){}
-    setAiProvider('gemini'); setAiKey(''); setAiModel(''); setAiBaseUrl('');
-    savedAiRef.current = { provider:'gemini', key:'', model:'', baseUrl:'' }; // nada salvo a repor
+    setAiProvider(TEAM_AI_PROVIDER); setAiKey(''); setAiModel(''); setAiBaseUrl(''); // [EJA]
+    savedAiRef.current = { provider:TEAM_AI_PROVIDER, key:'', model:'', baseUrl:'' }; // nada salvo a repor // [EJA]
     setMsg(AI_SHARED_KEY ? t('acc.ai.cleared.shared') : t('acc.ai.cleared'));
   });
 
@@ -19933,6 +19957,7 @@ function AccountModal({ user, projects, onClose, onChangePassword, onChangeName,
             </datalist>`}`
           : html`<div class="row" style="gap:6px;flex-wrap:wrap">
               ${(provDef?.models||[]).map(m=>html`<button key=${m.id} class="opt ${aiModel===m.id || (!aiModel && m.def) ? 'on':''}"
+                disabled=${TEAM_LOCKDOWN && !aiKey.trim() && aiProvider==='openai' /* [EJA] com a chave da equipe o modelo e definido pelo servidor */}
                 title=${m.note} onClick=${()=>setAiModel(m.id)}>${m.label}${m.def?html`<span style="opacity:.65;font-size:10px;margin-left:5px">${t('acc.default')}</span>`:''}</button>`)}
             </div>`}
         <details class="collap"><summary class="hint" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0 0 6px">${t('acc.howPick')}</summary>
@@ -26114,13 +26139,14 @@ const OLLAMA_MODEL_SUGGESTIONS = [
 // de sempre); a Edge Function decide isso, aqui so manda o que tiver preenchido.
 function getAIConfig(){
   try{
+    const k = localStorage.getItem('qualilab:ai_key') || ''; // [EJA]
     return {
-      provider: localStorage.getItem('qualilab:ai_provider') || 'gemini',
-      apiKey: localStorage.getItem('qualilab:ai_key') || '',
+      provider: teamAIProvider(localStorage.getItem('qualilab:ai_provider') || TEAM_AI_PROVIDER, k), // [EJA]
+      apiKey: k, // [EJA] (era: localStorage.getItem('qualilab:ai_key') || '')
       model: localStorage.getItem('qualilab:ai_model') || '',
       baseUrl: localStorage.getItem('qualilab:ai_baseurl') || '',
     };
-  }catch(e){ return { provider:'gemini', apiKey:'', model:'', baseUrl:'' }; }
+  }catch(e){ return { provider:TEAM_AI_PROVIDER, apiKey:'', model:'', baseUrl:'' }; } // [EJA]
 }
 // A chave colada parece ser de OUTRO provedor? Erro real do autor (jul/2026): trocar de provedor
 // limpa modelo e URL base, mas NAO a chave (limpar arriscaria apagar a chave salva de quem so
@@ -26609,6 +26635,7 @@ async function askAIProxy(cfg, { system, messages, signal }){
       ...(system ? { system } : {}),
       messages: msgs,
       provider: cfg.provider,
+      ...(_projForAI ? { project_id: _projForAI } : {}), // [EJA] projeto NUVEM aberto: a ai-ask do fork so libera a chave do servidor dentro dele
       ...(cfg.apiKey ? { apiKey: cfg.apiKey } : {}),
       ...(activeModelId(cfg) ? { model: activeModelId(cfg) } : {}),
       ...(cfg.baseUrl ? { baseUrl: cfg.baseUrl } : {}),
@@ -26684,6 +26711,7 @@ function aiUserRate(){
 function activeModelId(cfg){
   cfg = cfg || getAIConfig();
   const prov = AI_PROVIDERS.find(p=>p.id===cfg.provider);
+  if(TEAM_LOCKDOWN && !cfg.apiKey && cfg.provider==='openai') return TEAM_AI_MODEL; // [EJA] chave da equipe: o modelo e o do servidor (rotulo, estimativa de custo e trilha ficam honestos)
   return cfg.model || (prov?.models||[]).find(m=>m.def)?.id || '';
 }
 // preco unitario (US$/1M) do provedor+modelo: ollama/local = gratis; custom/azure = tarifa do
@@ -31265,7 +31293,7 @@ try{
       });
     }).catch(()=>{});
   }
-  if('launchQueue' in window && window.launchQueue.setConsumer){
+  if(!TEAM_LOCKDOWN && 'launchQueue' in window && window.launchQueue.setConsumer){ // [EJA] lockdown: duplo clique num .qualilab nao abre nada
     window.launchQueue.setConsumer(async (params)=>{
       const h = params.files && params.files[0];
       if(!h) return;
